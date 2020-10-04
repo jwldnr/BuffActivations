@@ -38,7 +38,10 @@ local ABILITIES = {
     ["Power Word: Fortitude"] = true,
 
     -- warlock
-    ["Soulstone"] = true
+    ["Soulstone"] = true,
+
+    -- mage
+    ["Arcane Intellect"] = true
 }
 
 function Addon:HasBuff(name)
