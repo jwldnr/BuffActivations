@@ -30,29 +30,20 @@ local ONLY_SHOW_IN_COMBAT = false
 local ABILITY_TYPE_SPELL = "spell"
 local ABILITY_TYPE_MACRO = "macro"
 
-local ABILITIES = {
+-- format: ["ability_name"] = "buff_name"
+local BUFF_NAMES = {
     -- warrior
-    ["Battle Shout"] = true,
+    ["Battle Shout"] = "Battle Shout",
 
     -- priest
-    ["Power Word: Fortitude"] = true,
+    ["Power Word: Fortitude"] = "Power Word: Fortitude",
 
     -- warlock
-    ["Soulstone"] = true,
+    ["Soulstone"] = "Soulstone",
 
     -- mage
-    ["Arcane Intellect"] = true
+    ["Arcane Intellect"] = "Arcane Brilliance"
 }
-
-function Addon:HasBuff(name)
-    for i = 1, #self.buffs do
-        if (self.buffs[i] == name) then
-            return true
-        end
-    end
-
-    return false
-end
 
 function Addon:OnEvent(event, ...)
     local action = self[event]
@@ -69,18 +60,20 @@ function Addon:UpdateActionButtons()
         for i = 1, 12 do
             local button = _G[template..i]
             local type, id = GetActionInfo(button.action)
-            local name = nil
+            local spell = nil
 
             if (id and type == ABILITY_TYPE_SPELL) then
-                name = GetSpellInfo(id)
+                spell = GetSpellInfo(id)
             end
 
             if (id and type == ABILITY_TYPE_MACRO) then
-                name = GetSpellInfo(select(1, GetMacroSpell(id)))
+                spell = GetSpellInfo(select(1, GetMacroSpell(id)))
             end
 
-            if (name and ABILITIES[name]) then
-                self.buttons[button] = name
+            if (spell and BUFF_NAMES[spell]) then
+                -- print("index spell:", BUFF_NAMES[spell])
+
+                self.buttons[button] = BUFF_NAMES[spell]
             end
         end
     end
@@ -104,17 +97,20 @@ function Addon:ToggleButtonOverlays()
     self.buffs = {}
 
     local i = 1
-    local buff = UnitBuff(UNIT_TAG_PLAYER, i)
+    local name = UnitBuff(UNIT_TAG_PLAYER, i)
 
-    while (buff) do
-        self.buffs[#self.buffs + 1] = buff
+    while (name) do
+        self.buffs[name] = true
 
         i = i + 1
-        buff = UnitBuff(UNIT_TAG_PLAYER, i)
+        name = UnitBuff(UNIT_TAG_PLAYER, i)
     end
 
-    for button, name in pairs(self.buttons) do
-        if (self:HasBuff(name)) then
+    for button, buff in pairs(self.buttons) do
+        -- print("buff buff:", buff)
+        -- print("hasbuff?", self.buffs[buff])
+
+        if (self.buffs[buff]) then
             ActionButton_HideOverlayGlow(button)
         else
             ActionButton_ShowOverlayGlow(button)
