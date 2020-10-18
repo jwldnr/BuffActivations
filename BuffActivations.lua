@@ -2,7 +2,10 @@ local AddonName, Addon = ...
 
 -- locals and speed
 local select = select
+local pairs = pairs
 
+local _G = _G
+local CreateFrame = CreateFrame
 local UnitBuff = UnitBuff
 
 local ActionButton_ShowOverlayGlow = ActionButton_ShowOverlayGlow
@@ -45,6 +48,22 @@ local BUFF_NAMES = {
     ["Arcane Intellect"] = "Arcane Brilliance"
 }
 
+function Addon:GetBuffName(spell)
+    return BUFF_NAMES[spell]
+end
+
+-- main
+function Addon:Load()
+    self.frame = CreateFrame("Frame", nil)
+    
+    self.frame:SetScript("OnEvent", function(_, ...)
+        self:OnEvent(...)
+    end)
+
+    self.frame:RegisterEvent("ADDON_LOADED")
+    self.frame:RegisterEvent("PLAYER_LOGIN")
+end
+
 function Addon:OnEvent(event, ...)
     local action = self[event]
   
@@ -56,7 +75,7 @@ end
 function Addon:UpdateActionButtons()
     self.buttons = {}
 
-    for _, template in ipairs(ACTION_BUTTON_TEMPLATES) do
+    for _, template in pairs(ACTION_BUTTON_TEMPLATES) do
         for i = 1, 12 do
             local button = _G[template..i]
             local type, id = GetActionInfo(button.action)
@@ -70,10 +89,9 @@ function Addon:UpdateActionButtons()
                 spell = GetSpellInfo(select(1, GetMacroSpell(id)))
             end
 
-            if (spell and BUFF_NAMES[spell]) then
-                -- print("index spell:", BUFF_NAMES[spell])
-
-                self.buttons[button] = BUFF_NAMES[spell]
+            local name = self:GetBuffName(spell)
+            if (name) then
+                self.buttons[button] = name
             end
         end
     end
@@ -90,7 +108,7 @@ function Addon:HideButtonOverlays()
 end
 
 function Addon:ToggleButtonOverlays()
-    if (ONLY_SHOW_IN_COMBAT and not UnitAffectingCombat(PLAYER)) then
+    if (ONLY_SHOW_IN_COMBAT and not UnitAffectingCombat(UNIT_TAG_PLAYER)) then
         return
     end
 
@@ -107,9 +125,6 @@ function Addon:ToggleButtonOverlays()
     end
 
     for button, buff in pairs(self.buttons) do
-        -- print("buff buff:", buff)
-        -- print("hasbuff?", self.buffs[buff])
-
         if (self.buffs[buff]) then
             ActionButton_HideOverlayGlow(button)
         else
@@ -119,10 +134,13 @@ function Addon:ToggleButtonOverlays()
 end
 
 function Addon:ADDON_LOADED(name)
-    if (AddonName == name) then
+    if (name == AddonName) then
+        -- self.frame:RegisterEvent("PLAYER_REGEN_ENABLED")
+        self.frame:RegisterUnitEvent("UNIT_AURA", UNIT_TAG_PLAYER)
+
+        print(name, "loaded")
+
         self.frame:UnregisterEvent("ADDON_LOADED")
-        
-        print(AddonName, "loaded")
     end
 end
 
@@ -135,23 +153,12 @@ function Addon:PLAYER_REGEN_ENABLED()
     self:HideButtonOverlays()
 end
 
-function Addon:PLAYER_ENTERING_WORLD()
+function Addon:PLAYER_LOGIN()
     self:UpdateActionButtons()
     self:ToggleButtonOverlays()
+
+    self.frame:UnregisterEvent("PLAYER_LOGIN")
 end
 
-function Addon:Load()
-    self.frame = CreateFrame("Frame", nil)
-    
-    self.frame:SetScript("OnEvent", function(_, ...)
-        self:OnEvent(...)
-    end)
-
-    self.frame:RegisterEvent("ADDON_LOADED")
-    self.frame:RegisterEvent("PLAYER_ENTERING_WORLD")
-    self.frame:RegisterEvent("PLAYER_REGEN_ENABLED")
-
-    self.frame:RegisterUnitEvent("UNIT_AURA", UNIT_TAG_PLAYER)
-end
-
+-- begin
 Addon:Load()
