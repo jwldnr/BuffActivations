@@ -1,4 +1,4 @@
-## Interface: 90001
+## Interface: 20501
 ## Title: BuffActivations
 ## Notes: Light up any ability on your hotbar when you're missing that ability buff.
 ## Version: 1.0
