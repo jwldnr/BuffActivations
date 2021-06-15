@@ -13,11 +13,13 @@ local UnitBuff = UnitBuff
 local GetActionInfo = GetActionInfo
 local GetSpellInfo = GetSpellInfo
 local GetMacroSpell = GetMacroSpell
+local GetItemInfo = GetItemInfo
 
 local UNIT_PLAYER = "player"
 
-local ABILITY_TYPE_SPELL = "spell"
-local ABILITY_TYPE_MACRO = "macro"
+local ACTION_TYPE_SPELL = "spell"
+local ACTION_TYPE_MACRO = "macro"
+local ACTION_TYPE_ITEM = "item"
 
 -- overlay stuff
 local numOverlays = 0
@@ -53,12 +55,12 @@ local function GetAbilityName(slot)
   local type, id = GetActionInfo(slot)
   local name = nil
 
-  if (id and type == ABILITY_TYPE_SPELL) then
-    name = GetSpellInfo(id)
-  end
-
-  if (id and type == ABILITY_TYPE_MACRO) then
-    name = GetSpellInfo(select(1, GetMacroSpell(id)))
+  if (id and type == ACTION_TYPE_SPELL) then
+    name = select(1, GetSpellInfo(id))
+  elseif (id and type == ACTION_TYPE_MACRO) then
+    name = select(1, GetSpellInfo(select(1, GetMacroSpell(id))))
+  elseif (id and type == ACTION_TYPE_ITEM) then
+    name = select(1, GetItemInfo(id))
   end
 
   return name
@@ -71,7 +73,7 @@ local function GetActiveBuffs()
   local name = UnitBuff(UNIT_PLAYER, i)
 
   while (name) do
-    buffs[name] = true -- save active buff
+    buffs[name] = true -- active buff
 
     i = i + 1
     name = UnitBuff(UNIT_PLAYER, i)
