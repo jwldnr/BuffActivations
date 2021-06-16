@@ -7,17 +7,12 @@ local select = select
 local CreateFrame = CreateFrame
 local UIParent = UIParent
 
-local UnitExists = UnitExists
-local UnitIsFriend = UnitIsFriend
 local UnitBuff = UnitBuff
-local UnitDebuff = UnitDebuff
-local UnitHealth = UnitHealth
-local UnitHealthMax = UnitHealthMax
-local UnitClass = UnitClass
 
 local GetActionInfo = GetActionInfo
 local GetSpellInfo = GetSpellInfo
 local GetMacroSpell = GetMacroSpell
+local GetItemInfo = GetItemInfo
 
 local ACTION_BUTTON_TEMPLATES = {
   "ActionButton",
@@ -28,15 +23,10 @@ local ACTION_BUTTON_TEMPLATES = {
 }
 
 local UNIT_PLAYER = "player"
-local UNIT_TARGET = "target"
 
-local ABILITY_TYPE_SPELL = "spell"
-local ABILITY_TYPE_MACRO = "macro"
-
-local SHIELD_BUFF_NAME = "Power Word: Shield"
-local SHIELD_DEBUFF_NAME = "Weakened Soul"
-
-local HEALTH_THRESHOLD = 95
+local ACTION_TYPE_SPELL = "spell"
+local ACTION_TYPE_MACRO = "macro"
+local ACTION_TYPE_ITEM = "item"
 
 -- overlay stuff
 local numOverlays = 0
@@ -44,33 +34,26 @@ local overlays = {}
 
 local AnimateTexCoords = AnimateTexCoords
 
--- local DEBUG = true
-
-local function debug(message)
-  if (DEBUG or false) then
-    print("["..AddonName.."]", message)
-  end
-end
-
 -- format: ["ability_name"] = "buff_name"
-local BUFF_NAMES = {
-    -- warrior
-    ["Battle Shout"] = "Battle Shout",
-
-    -- priest
-    ["Power Word: Fortitude"] = "Power Word: Fortitude",
-    ["Divine Spirit"] = "Divine Spirit",
-    ["Shadow Protection"] = "Shadow Protection",
-
-    -- warlock
-    ["Soulstone"] = "Soulstone",
-
-    -- mage
-    ["Arcane Intellect"] = "Arcane Brilliance"
+local TRACKED_BUFFS = {
+  -- druid
+  ["Mark of the Wild"] = "Mark of the Wild",
+  ["Thorns"] = "Thorns",
+  -- warrior
+  ["Battle Shout"] = "Battle Shout",
+  -- priest
+  ["Power Word: Fortitude"] = "Power Word: Fortitude",
+  ["Divine Spirit"] = "Divine Spirit",
+  ["Shadow Protection"] = "Shadow Protection",
+  ["Inner Fire"] = "Inner Fire",
+  -- warlock
+  ["Soulstone"] = "Soulstone",
+  -- mage
+  ["Arcane Intellect"] = "Arcane Brilliance"
 }
 
 local function GetBuffName(name)
-    return BUFF_NAMES[name]
+  return TRACKED_BUFFS[name]
 end
 
 local function GetOverlay(key)
@@ -134,7 +117,7 @@ local function CreateOverlay(button)
 
   -- create overlay
   local name = button:GetName()
-  local frame = CreateFrame("Frame", name.."ShieldOverlay"..numOverlays, UIParent)
+  local frame = CreateFrame("Frame", name .. "ShieldOverlay" .. numOverlays, UIParent)
   frame:SetFrameStrata("HIGH")
 
   local width, height = button:GetSize()
@@ -302,7 +285,7 @@ local function CreateOverlay(button)
 
   -- set animation out scripts
   frame.animOut:SetScript("OnFinished", AnimOut_OnFinished)
-  
+
   -- <Alpha target="$parentOuterGlowOver" duration="0.2" fromAlpha="0" toAlpha="1" order="1"/>
   local alpha7 = frame.animOut:CreateAnimation("Alpha")
   alpha7:SetTarget("$parentOuterGlowOver")
@@ -341,6 +324,21 @@ local function CreateOverlay(button)
   return frame
 end
 
+local function GetAbilityName(slot)
+  local type, id = GetActionInfo(slot)
+  local name = nil
+
+  if (id and type == ACTION_TYPE_SPELL) then
+    name = select(1, GetSpellInfo(id))
+  elseif (id and type == ACTION_TYPE_MACRO) then
+    name = select(1, GetSpellInfo(select(1, GetMacroSpell(id))))
+  elseif (id and type == ACTION_TYPE_ITEM) then
+    name = select(1, GetItemInfo(id))
+  end
+
+  return name
+end
+
 local function ShowOverlay(button)
   local name = button:GetName()
   local overlay = GetOverlay(name)
@@ -369,26 +367,32 @@ local function HideOverlay(button)
   end
 end
 
+local function GetActiveBuffs()
+  local buffs = {}
+
+  local i = 1
+  local name = UnitBuff(UNIT_PLAYER, i)
+
+  while (name) do
+    buffs[name] = true -- active buff
+
+    i = i + 1
+    name = UnitBuff(UNIT_PLAYER, i)
+  end
+
+  return buffs
+end
+
 local function ToggleButtonOverlays(buttons)
-    local buffs = {}
+  local buffs = GetActiveBuffs()
 
-    local i = 1
-    local name = UnitBuff(UNIT_PLAYER, i)
-
-    while (name) do
-        buffs[name] = true
-
-        i = i + 1
-        name = UnitBuff(UNIT_PLAYER, i)
+  for button, buff in pairs(buttons) do
+    if (buffs[buff]) then
+      HideOverlay(button)
+    else
+      ShowOverlay(button)
     end
-
-    for button, buff in pairs(buttons) do
-        if (buffs[buff]) then
-            HideOverlay(button)
-        else
-            ShowOverlay(button)
-        end
-    end
+  end
 end
 
 local function GetActionButtons()
@@ -396,18 +400,9 @@ local function GetActionButtons()
 
   for _, template in pairs(ACTION_BUTTON_TEMPLATES) do
     for i = 1, 12 do
-      local button = _G[template..i]
-      local type, id = GetActionInfo(button.action)
-      local name = nil
+      local button = _G[template .. i]
 
-      if (id and type == ABILITY_TYPE_SPELL) then
-        name = GetSpellInfo(id)
-      end
-
-      if (id and type == ABILITY_TYPE_MACRO) then
-        name = GetSpellInfo(select(1, GetMacroSpell(id)))
-      end
-
+      local name = GetAbilityName(button.action)
       local buff = GetBuffName(name)
       if (buff) then
         buttons[button] = buff
@@ -422,16 +417,18 @@ end
 function Addon:Load()
   self.frame = CreateFrame("Frame", nil)
 
-  self.frame:SetScript("OnEvent", function(_frame, ...)
-      self:OnEvent(...)
-    end)
+  local function OnEvent(_, ...)
+    self:OnEvent(...)
+  end
+
+  self.frame:SetScript("OnEvent", OnEvent)
 
   self.frame:RegisterEvent("ADDON_LOADED")
 end
 
 function Addon:OnEvent(event, ...)
   local action = self[event]
-  
+
   if (action) then
     action(self, ...)
   end
@@ -448,7 +445,7 @@ function Addon:ADDON_LOADED(name)
 end
 
 function Addon:UNIT_AURA()
-    ToggleButtonOverlays(GetActionButtons())
+  ToggleButtonOverlays(GetActionButtons())
 end
 
 Addon:Load()
