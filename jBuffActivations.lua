@@ -36,6 +36,7 @@ local TRACKED_BUFFS = {
   ["Thorns"] = "Thorns",
   -- warrior
   ["Battle Shout"] = "Battle Shout",
+  ["Rampage"] = "Rampage",
   -- priest
   ["Power Word: Fortitude"] = "Power Word: Fortitude",
   ["Divine Spirit"] = "Divine Spirit",
@@ -44,7 +45,9 @@ local TRACKED_BUFFS = {
   -- warlock
   ["Soulstone"] = "Soulstone",
   -- mage
-  ["Arcane Intellect"] = "Arcane Brilliance"
+  ["Arcane Intellect"] = "Arcane Brilliance",
+  -- items
+  ["Elixir of Lion's Strength"] = "Lesser Strength"
 }
 
 local function GetAbilityBuff(name)
