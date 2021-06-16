@@ -393,10 +393,12 @@ function Addon:ToggleButtonOverlay(slot)
 end
 
 function Addon:ToggleButtonOverlays()
+  local buffs = GetActiveBuffs()
+
   for slot, buff in pairs(self.buffs) do
     local button = self.buttons[slot]
 
-    if (GetActiveBuffs()[buff]) then
+    if (buffs[buff]) then
       HideOverlay(button)
     else
       ShowOverlay(button)
