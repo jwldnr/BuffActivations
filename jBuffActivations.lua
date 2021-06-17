@@ -3,17 +3,20 @@ local AddonName, Addon = ...
 -- locals for speed
 local pairs = pairs
 local select = select
+local time = time
 
 local CreateFrame = CreateFrame
 local hooksecurefunc = hooksecurefunc
 local UIParent = UIParent
 
 local UnitBuff = UnitBuff
+local UnitAffectingCombat = UnitAffectingCombat
 
 local GetActionInfo = GetActionInfo
 local GetSpellInfo = GetSpellInfo
 local GetMacroSpell = GetMacroSpell
 local GetItemInfo = GetItemInfo
+local GetSpellCooldown = GetSpellCooldown
 
 local UNIT_PLAYER = "player"
 
@@ -28,6 +31,9 @@ local overlays = {}
 local AnimateTexCoords = AnimateTexCoords
 
 local EVENT_ACTIONBAR_SLOT_CHANGED = "ACTIONBAR_SLOT_CHANGED"
+
+-- buff stuff
+local UPDATE_INTERVAL = 1 -- buff cache throttle interval
 
 -- format: ["ability_name"] = "buff_name"
 local TRACKED_BUFFS = {
@@ -69,20 +75,24 @@ local function GetAbilityName(slot)
   return name
 end
 
-local function GetActiveBuffs()
-  local buffs = {}
+function Addon:GetActiveBuffs(throttle)
+  if (not throttle or throttle and time() > self.lastUpdate + UPDATE_INTERVAL) then
+    self.buffsCache = {}
 
-  local i = 1
-  local name = UnitBuff(UNIT_PLAYER, i)
+    local i = 1
+    local name = UnitBuff(UNIT_PLAYER, i)
 
-  while (name) do
-    buffs[name] = true -- active buff
+    while (name) do
+      self.buffsCache[name] = true -- active buff
 
-    i = i + 1
-    name = UnitBuff(UNIT_PLAYER, i)
+      i = i + 1
+      name = UnitBuff(UNIT_PLAYER, i)
+    end
+
+    self.lastUpdate = time()
   end
 
-  return buffs
+  return self.buffsCache
 end
 
 local function GetOverlay(key)
@@ -381,11 +391,15 @@ local function HideOverlay(button)
   end
 end
 
+local function HasCooldown(slot)
+  return select(2, GetSpellCooldown(slot)) > 0
+end
+
 function Addon:ToggleButtonOverlay(slot)
   local buff = self.buffs[slot]
   local button = self.buttons[slot]
 
-  if (not buff or buff and GetActiveBuffs()[buff]) then
+  if (not buff or not UnitAffectingCombat(UNIT_PLAYER) or buff and self:GetActiveBuffs(true)[buff] or HasCooldown(slot)) then
     HideOverlay(button)
   else
     ShowOverlay(button)
@@ -393,17 +407,29 @@ function Addon:ToggleButtonOverlay(slot)
 end
 
 function Addon:ToggleButtonOverlays()
-  local buffs = GetActiveBuffs()
+  local buffs = self:GetActiveBuffs()
 
   for slot, buff in pairs(self.buffs) do
     local button = self.buttons[slot]
 
-    if (buffs[buff]) then
+    if (not UnitAffectingCombat(UNIT_PLAYER) or buffs[buff] or HasCooldown(slot)) then
       HideOverlay(button)
     else
       ShowOverlay(button)
     end
   end
+end
+
+function Addon:PLAYER_ENTER_COMBAT()
+  self.combat = true
+
+  self:ToggleButtonOverlays()
+end
+
+function Addon:PLAYER_LEAVE_COMBAT()
+  self.combat = false
+
+  self:ToggleButtonOverlays()
 end
 
 -- main
@@ -418,6 +444,9 @@ function Addon:Load()
 
   self.frame:RegisterEvent("ADDON_LOADED")
   self.frame:RegisterEvent("PLAYER_ENTERING_WORLD")
+
+  self.frame:RegisterEvent("PLAYER_ENTER_COMBAT")
+  self.frame:RegisterEvent("PLAYER_LEAVE_COMBAT")
 
   self.frame:RegisterUnitEvent("UNIT_AURA", UNIT_PLAYER)
 end
@@ -434,6 +463,12 @@ function Addon:ADDON_LOADED(name)
   if (AddonName == name) then
     self.buffs = {}
     self.buttons = {}
+
+    -- buff cache logic
+    self.buffsCache = {}
+    self.lastUpdate = 0
+
+    self.combat = false
 
     print(name, "loaded")
 
